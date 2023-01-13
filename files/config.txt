@@ -1,0 +1,38 @@
+## Configure the relevant fields for trifacta-conf.json
+
+##Basic necessary Azure configs
+azure.directoryid = ""
+azure.keyVaultUrl = ""
+
+databricks.serviceUrl = ""
+databricks.sparkVersion = "10.4.x-scala2.12"
+
+#If embedding appId/Secret in trifacta-conf.json
+azure.applicationid = ""
+azure.secret = ""
+
+#Use if using managed identities to retrieve appId/Secret from keyVaultUrl
+
+
+# TODO: update the code to handle Array values correctly
+fileStorage.whitelist = ["sftp","abfss"]
+fileStorage.defaultBaseUris = ["abfss://<container>@<storageAccountName>.dfs.core.windows.net"]
+
+# For enabling databricks
+feature.databricks.connection.enabled = true
+feature.databricks.enableExternalTableWrites = true
+feature.databricks.enableDeltaTableWrites = true
+webapp.runInDatabricks = true
+webapp.runWithSparkSubmit = false
+
+# don't change these values
+azure.adlsgen2.mode =  "system"
+webapp.storageProtocal = "abfss"
+metadata.cloud = "azure"    
+hdfs.enabled = false
+
+# Process updating
+data-service.jvmOptions = ["-Xmx2048m", "-Dhttps.protocols=TLSv1.2","-Djdk.tls.client.protocols=TLSv1.2","-Djavax.security.auth.useSubjectCredsOnly=false"]
+java-vfs-service.jvmOptions = ["-Xmx1024m","-Dhttps.protocols=TLSv1.2","-Djdk.tls.client.protocols=TLSv1.2"]
+data-service.httpsProtocols.defaultProtocols = "TLSv1.2"
+data-service.httpsProtocols.reset = true
