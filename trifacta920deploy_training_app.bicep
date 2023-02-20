@@ -10,10 +10,10 @@ param location string = resourceGroup().location
 param networkSecurityGroupName string = '${deploymentName}-${deploymentString}-nsg'
 param subnetName string = 'default'
 param virtualNetworkName string = '${deploymentName}-${deploymentString}-net'
-param publicIpAddressName string = '${deploymentName}-${deploymentString}-pip2'
+param publicIpAddressName string = '${deploymentName}-${deploymentString}-pip'
 param publicIpAddressType string = 'static'
 param publicIpAddressSku string = 'Basic'
-param virtualMachineName string = '${deploymentName}-${deploymentString}-vm2'
+param virtualMachineName string = '${deploymentName}-${deploymentString}-vm'
 param virtualMachineSize string = 'Standard_D8s_v3'
 param adminUsername string = 'trifactaAdmin'
 @secure()

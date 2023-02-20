@@ -3,7 +3,8 @@
 
   become: true
 
-    # don't set the following
+  vars:
+    # DO NOT EDIT THE FOLLOWING
     upload_location: /root/trifacta_temp
     trifacta_install_dir: /opt/trifacta
     trifacta_version: "9.2.0"
@@ -202,12 +203,14 @@
         - name: initialize the database
           command: "{{trifacta_install_dir}}/bin/setup-utils/db/trifacta-create-postgres-roles-dbs.sh"
 
-    #       end of postgres install block
+    # end of postgres install block
 
+    - name: populate service facts  
+      ansible.builtin.service_facts:
     - name: Start service postgresql-12, if not running
-      service:
+      ansible.builtin.service:
         name: postgresql-12
-        enabled: yes
+        enabled: true
         state: started
       when: pg_hba_bak.stat.exists
 
@@ -217,27 +220,6 @@
         owner: trifacta
         group: trifacta
         recurse: yes
-
-    #Update trifacta-conf.json
-    - name: copy update_conf.py
-      copy:
-        src: update_conf.py
-        dest: '{{upload_location}}/update_conf.py'
-
-    - name: copy config.txt
-      copy:
-        src: config.txt
-        dest: '{{upload_location}}/config.txt'
-
-    - name: run update conf
-      command: python3 {{upload_location}}/update_conf.py {{upload_location}}
-
-
-    - name: Start trifacta service, if not running
-      service:
-        name: trifacta
-        state: started
-
     #Update RHEL sylinux settings
     - name: open http service in firewall
       shell: firewall-cmd --zone=public --permanent --add-service=http
@@ -262,6 +244,27 @@
     - name: set selinux boolean to allow netrowk connect
       shell: setsebool -P httpd_can_network_connect 1
       become: true
+    #Update trifacta-conf.json
+    - name: copy update_conf.py
+      copy:
+        src: update_conf.py
+        dest: '{{upload_location}}/update_conf.py'
+
+    - name: copy config.txt
+      copy:
+        src: config.txt
+        dest: '{{upload_location}}/config.txt'
+
+    - name: run update conf
+      command: python3 {{upload_location}}/update_conf.py {{upload_location}}
+
+    - name: populate service facts for Trifacta
+      ansible.builtin.service_facts:
+    - name: Start trifacta service, if not running
+      ansible.builtin.service:
+        name: trifacta
+        enabled: true
+        state: started
 
 
 

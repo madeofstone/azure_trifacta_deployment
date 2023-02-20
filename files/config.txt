@@ -27,7 +27,7 @@ webapp.runWithSparkSubmit = false
 
 # don't change these values
 azure.adlsgen2.mode =  "system"
-webapp.storageProtocal = "abfss"
+webapp.storageProtocol = "abfss"
 metadata.cloud = "azure"    
 hdfs.enabled = false
 
