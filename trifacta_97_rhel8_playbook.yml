@@ -1,0 +1,273 @@
+---
+- hosts: all
+
+  become: true
+
+  vars:
+    # don't set the following
+    upload_location: /root/trifacta_temp
+    trifacta_install_dir: /opt/trifacta
+    trifacta_version: "9.7.0"
+    trifacta_build: "2176418"
+    local_home_install: "."
+    trifacta_server_deps: "trifacta-server-deps-{{trifacta_version}}-{{trifacta_build}}-el8.tar.gz"
+    trifacta_server_rpm: "trifacta-server-{{trifacta_version}}-{{trifacta_build}}.el8.x86_64.rpm"
+
+
+  tasks:
+    #First need to resize volume groups on disk
+    - name: Resize the volume group rootvg to the maximum possible
+      community.general.lvg:  
+        vg: rootvg
+        pvs: /dev/sda2
+        pvresize: true
+
+    - name: Extend the root logical volume to 20g.
+      community.general.lvol:
+        vg: rootvg
+        lv: rootlv
+        size: 20g
+
+    - name: Extend the var logical volume to 20g.
+      community.general.lvol:
+        vg: rootvg
+        lv: varlv
+        size: 20g
+    
+    - name: Extend the home logical volume to 10g.
+      community.general.lvol:
+        vg: rootvg
+        lv: homelv
+        size: 10g
+
+    - name: Extend rootlv
+      command: xfs_growfs /dev/rootvg/rootlv
+
+    - name: Extend varlv
+      command: xfs_growfs /dev/rootvg/varlv
+
+    - name: Extend homelv
+      command: xfs_growfs /dev/rootvg/homelv
+
+    #Download installation files
+    - name: Create {{upload_location}} if it does not exist
+      ansible.builtin.file:
+        path: '{{upload_location}}'
+        state: directory
+        owner: 'root'
+        group: 'root'
+        mode: '0755'
+
+    - name: Download dependencies file ({{trifacta_server_deps}})
+      get_url:
+        url: "https://trifacta4dz4c6stor.blob.core.windows.net/trifacta-installer/trifacta-server-deps-9.7.0-2176418-el8.tar.gz?sp=r&st=2023-02-24T15:04:28Z&se=2023-06-29T22:04:28Z&spr=https&sv=2021-06-08&sr=b&sig=eoZFUJhhN8NxM1SAy3NffyunZ1F8NW3JG44UzKISACw%3D"
+        dest: "{{upload_location}}/{{trifacta_server_deps}}"
+        checksum: "sha256:d802b5454639fd7ae8c9bc4c998bc8d1449413925c6d6cc529a14f3943c9bf01"
+
+    - name: Download trifacta RPM ({{trifacta_server_rpm}})
+      get_url:
+        url: "https://trifacta4dz4c6stor.blob.core.windows.net/trifacta-installer/trifacta-server-9.7.0-2176418.el8.x86_64.rpm?sp=r&st=2023-02-24T15:02:50Z&se=2023-06-29T22:02:50Z&spr=https&sv=2021-06-08&sr=b&sig=Zn7uShIhCvcIXB21mOpx7HJ0m6XjF0uuk3cp3%2BVmLTQ%3D"
+        dest: "{{upload_location}}/{{trifacta_server_rpm}}"
+        checksum: "sha256:071423ff85d9810814a64a09469e7ee06910d7f12d672ec31ba8e43eb5c50a27"
+
+    #Install Trifacta and dependencies
+    - name: Unarchive ({{trifacta_server_deps}})
+      unarchive:
+        src: "{{ upload_location }}/{{ trifacta_server_deps }}"
+        dest: "{{upload_location}}"
+        owner: "root"
+        group: "root"
+        mode: "o-w+r"
+        remote_src: yes
+
+
+    - name: copy local.repo
+      copy:
+        src: '{{ upload_location }}/local.repo'
+        dest: /etc/yum.repos.d/
+        remote_src: yes
+
+
+    - name: trifacta repo directory status
+      stat:
+        path: /var/local/trifacta
+      register: trifacta_repo_status
+
+
+    - name: Move trifacta repo directory
+      command: "mv {{ upload_location }}/trifacta /var/local/"
+      when: trifacta_repo_status.stat.exists == False
+
+
+    - name: install python3
+      dnf:
+        name:
+          - python3
+          - python3-setuptools
+        disablerepo: "*"
+        enablerepo: "local"
+        state: present
+
+    - name: install java 8 from local repo
+      dnf:
+        name:
+          - java-1.8.0-openjdk-devel
+        disablerepo: "*"
+        enablerepo: local
+        state: present
+
+    - name: postgress dnf install
+      dnf:
+        name: 'postgresql12-server'
+        disablerepo: "*"
+        enablerepo: local
+        state: present
+
+    - name: postgress client dnf install
+      dnf:
+        name: 'postgresql12-libs'
+        disablerepo: "*"
+        enablerepo: local
+        state: present
+
+    - name: install nodejs, nginx
+      dnf:
+        disablerepo: "*"
+        enablerepo: local
+        name:
+          - nodejs
+          - nginx
+        state: present
+
+    - name: install jq
+      dnf:
+        name:
+          - jq
+        state: present
+
+    - name: install trifacta
+      dnf:
+        disablerepo: "*"
+        enablerepo: local
+        disable_gpg_check: yes
+        name: "{{ upload_location }}/{{ trifacta_server_rpm }}"
+        state: present
+
+
+    - name: copy license file
+      copy:
+        src: license.json
+        dest: "{{ trifacta_install_dir }}/license/license.json"
+        owner: trifacta
+        group: trifacta
+        remote_src: false
+
+    - name: encrypt key
+      command: echo "trifacta" > {{trifacta_install_dir}}/conf/.key/customerKey
+
+    - name: Check if PostgreSQL database is initialized.
+      stat:
+        path: "/var/lib/pgsql/12/data/pg_hba.conf.bak"
+      register: pg_hba_bak
+
+
+    - name: Run PostgreSQL setup
+      when: not pg_hba_bak.stat.exists
+      block:
+
+        - name: init db
+          command: /usr/pgsql-12/bin/postgresql-12-setup initdb
+          # args:
+          #   creates: /var/lib/pgsql/12/data
+
+        - name: backup /var/lib/pgsql/12/data/pg_hba.conf  /var/lib/pgsql/12/data/pg_hba.conf.bak
+          copy:
+            remote_src: yes
+            src: /var/lib/pgsql/12/data/pg_hba.conf
+            dest: /var/lib/pgsql/12/data/pg_hba.conf.bak
+
+        - name: cp {{trifacta_install_dir}}/bin/setup-utils/db/pg_hba.conf.SAMPLE /var/lib/pgsql/12/data/pg_hba.conf
+          copy:
+            src: "{{trifacta_install_dir}}/bin/setup-utils/db/pg_hba.conf.SAMPLE"
+            dest: /var/lib/pgsql/12/data/pg_hba.conf
+            remote_src: yes
+            owner: postgres
+            group: postgres
+
+        - name: Start service postgresql-12, if not running
+          service:
+            name: postgresql-12
+            enabled: yes
+            state: started
+
+        - name: initialize the database
+          command: "{{trifacta_install_dir}}/bin/setup-utils/db/trifacta-create-postgres-roles-dbs.sh"
+
+    # end of postgres install block
+
+    - name: populate service facts  
+      ansible.builtin.service_facts:
+    - name: Start service postgresql-12, if not running
+      ansible.builtin.service:
+        name: postgresql-12
+        enabled: true
+        state: started
+      when: pg_hba_bak.stat.exists
+
+    - name: change permisions to trifacta user
+      file:
+        dest: "{{trifacta_install_dir}}/conf"
+        owner: trifacta
+        group: trifacta
+        recurse: yes
+    #Update RHEL sylinux settings
+    - name: open http service in firewall
+      shell: firewall-cmd --zone=public --permanent --add-service=http
+      become: true
+
+    - name: open port 3005
+      shell: firewall-cmd --zone=public --permanent --add-port=3005/tcp
+      become: true
+
+    - name: open https service in firewall
+      shell: firewall-cmd --zone=public --permanent --add-service=https
+      become: true
+
+    - name: open port 443
+      shell: firewall-cmd --zone=public --permanent --add-port=443/tcp
+      become: true
+
+    - name: reload settings
+      shell: firewall-cmd --reload
+      become: true
+
+    - name: set selinux boolean to allow netrowk connect
+      shell: setsebool -P httpd_can_network_connect 1
+      become: true
+    #Update trifacta-conf.json
+    - name: copy update_conf.py
+      copy:
+        src: update_conf.py
+        dest: '{{upload_location}}/update_conf.py'
+
+    - name: copy config.txt
+      copy:
+        src: config.txt
+        dest: '{{upload_location}}/config.txt'
+
+    - name: run update conf
+      command: python3 {{upload_location}}/update_conf.py {{upload_location}}
+    
+    - name: Ensure JAVA_HOME environment variable is correct
+      ansible.builtin.lineinfile:
+        path: /opt/trifacta/conf/env.sh
+        regexp: '^export JAVA_HOME'
+        line: 'export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk"'
+
+    - name: populate service facts for Trifacta
+      ansible.builtin.service_facts:
+    - name: Start trifacta service, if not running
+      ansible.builtin.service:
+        name: trifacta
+        enabled: true
+        state: started

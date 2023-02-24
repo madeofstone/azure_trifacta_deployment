@@ -12,7 +12,9 @@ azure.applicationid = ""
 azure.secret = ""
 
 #Use if using managed identities to retrieve appId/Secret from keyVaultUrl
-
+#azure.managedIdentities.enabled = true
+#azure.managedIdentities.keyVaultApplicationidSecretName = ""
+#azure.managedIdentities.keyVaultApplicationSecretSecretName = ""
 
 # TODO: update the code to handle Array values correctly
 fileStorage.whitelist = ["sftp","abfss"]
