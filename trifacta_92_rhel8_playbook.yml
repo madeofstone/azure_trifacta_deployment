@@ -138,6 +138,9 @@
           - nodejs
           - nginx
         state: present
+   
+    - name: update rhel repo
+      command: dnf update --disablerepo=* --enablerepo='*microsoft*' rhui-azure-rhel8-eus -y
 
     - name: install jq
       dnf:
